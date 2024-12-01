@@ -1,0 +1,5 @@
+**/input.txt
+
+.mypy_cache/
+.ruff_cache/
+.vscode/
