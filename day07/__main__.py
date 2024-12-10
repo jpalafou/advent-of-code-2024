@@ -6,6 +6,8 @@ def _operate(x1, x2, op):
         return x1 + x2
     elif op == "*":
         return x1 * x2
+    elif op == "||":
+        return int(str(x1) + str(x2))
 
 
 def operate(x, ops):
@@ -16,14 +18,17 @@ def operate(x, ops):
 
 
 # read input, count lines which can be made true
-sum_possibly_true = 0
+sum_possibly_true, sum_possibly_true_with_concat = 0, 0
 with open("day07/input.txt") as f:
     for line in f:
         test_str, args_str = line.strip().split(": ")
         test, args = int(test_str), list(map(int, args_str.split()))
 
-        for ops in product(["+", "*"], repeat=len(args) - 1):
+        for ops in product(["+", "*", "||"], repeat=len(args) - 1):
             if operate(args, ops) == test:
-                sum_possibly_true += test
+                sum_possibly_true_with_concat += test
+                if "||" not in ops:
+                    sum_possibly_true += test
                 break
 print("Part 1:", sum_possibly_true)
+print("Part 2:", sum_possibly_true_with_concat)
