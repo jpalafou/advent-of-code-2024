@@ -1,63 +1,78 @@
-from itertools import product
+def rec_det(A):
+    return A[0][0] * A[1][1] - A[0][1] * A[1][0]
+
+
+def det_times_inv(A):
+    return [[A[1][1], -A[0][1]], [-A[1][0], A[0][0]]]
+
+
+def mat_mul(A, x):
+    return A[0][0] * x[0] + A[0][1] * x[1], A[1][0] * x[0] + A[1][1] * x[1]
 
 
 class GameMachine:
-    def __init__(self, button_A, button_B, prize):
-        self.buttons = {"A": button_A, "B": button_B}
-        self.prize = prize
-        self.reset()
+    def __init__(self, button_A, button_B):
+        self.buttons = [[button_A[0], button_B[0]], [button_A[1], button_B[1]]]
 
-    def press_button(self, button, times=1):
-        self.tokens += {"A": 3, "B": 1}[button] * times
-        _button = self.buttons[button]
-        self.pos = (self.pos[0] + _button[0] * times, self.pos[1] + _button[1] * times)
-        if self.pos == self.prize:
-            self.found_prize = True
-        elif self.pos[0] > self.prize[0] or self.pos[1] > self.prize[1]:
-            self.overshot_prize = True
-
-    def reset(self):
-        self.pos = (0, 0)
-        self.tokens = 0
-        self.found_prize = False
-        self.overshot_prize = False
+    def inverse_button_press(self, pos):
+        _rec_det = rec_det(self.buttons)
+        if _rec_det == 0:
+            # for some reason, each game machine has only one winning path
+            raise ValueError("The buttons are not invertible")
+        x1, x2 = mat_mul(det_times_inv(self.buttons), pos)
+        if x1 % _rec_det != 0 or x2 % _rec_det != 0:
+            return None
+        return (x1 // _rec_det, x2 // _rec_det)
 
 
-def find_cheapest_path(game_machine):
-    cheapest_path = (None, None, None)
-    for a_times, b_times in product(range(1, 101), repeat=2):
-        game_machine.reset()
-        game_machine.press_button("A", a_times)
-        game_machine.press_button("B", b_times)
-        if game_machine.found_prize:
-            if cheapest_path[2] is None or game_machine.tokens < cheapest_path[2]:
-                cheapest_path = (a_times, b_times, game_machine.tokens)
-    return cheapest_path
+def load_game_machines(file, long_mode=False):
+    # read the file and parse the game machines and their prizes
+    game_machines = []
+    with open(file) as f:
+        buttons = {}
+        for line in f.readlines():
+            _line = line.strip()
+            if _line.startswith("Button A") or _line.startswith("Button B"):
+                buttons[_line[7]] = tuple(
+                    [
+                        int(x)
+                        for x in _line.strip(f"{_line[:8]}: X+")
+                        .replace("Y+", "")
+                        .split(", ")
+                    ]
+                )
+                continue
+            if _line.startswith("Prize"):
+                prize = tuple(
+                    [
+                        int(x)
+                        for x in _line.strip("Prize: X=").replace("Y=", "").split(", ")
+                    ]
+                )
+                game_machines.append(
+                    (
+                        GameMachine(buttons["A"], buttons["B"]),
+                        (
+                            (prize[0] + 10000000000000, prize[1] + 10000000000000)
+                            if long_mode
+                            else prize
+                        ),
+                    )
+                )
+    return game_machines
 
 
-# read game machine configurations, find the cheapest path to the prize
-with open("day13/input.txt") as f:
+def compute_cost(game_machines):
     cost = 0
-    buttons = {}
-    for line in f.readlines():
-        _line = line.strip()
-        if _line.startswith("Button A") or _line.startswith("Button B"):
-            buttons[_line[7]] = tuple(
-                [
-                    int(x)
-                    for x in _line.strip(f"{_line[:8]}: X+")
-                    .replace("Y+", "")
-                    .split(", ")
-                ]
-            )
-            continue
-        if _line.startswith("Prize"):
-            prize = tuple(
-                [int(x) for x in _line.strip("Prize: X=").replace("Y=", "").split(", ")]
-            )
-            gm = GameMachine(buttons["A"], buttons["B"], prize)
-            cheapest_path = find_cheapest_path(gm)
-            if cheapest_path[2] is not None:
-                cost += cheapest_path[2]
+    for i in range(len(game_machines)):
+        gm, prize = game_machines[i]
+        cheapest_path = gm.inverse_button_press(prize)
+        if cheapest_path is not None:
+            cost += 3 * cheapest_path[0] + cheapest_path[1]
+    return cost
 
-print("Part 1:", cost)
+
+# print the result for normal and long game modes
+file = "day13/input.txt"
+print("Part 1:", compute_cost(load_game_machines(file)))
+print("Part 2:", compute_cost(load_game_machines(file, True)))
