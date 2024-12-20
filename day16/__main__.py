@@ -1,18 +1,5 @@
-import sys
-
-
-class Graph:
-    def __init__(self):
-        self.weights = {}
-
-    def add_node(self, node):
-        if node not in self.weights:
-            self.weights[node] = {}
-
-    def add_edge(self, node1, node2, weight):
-        self.add_node(node1)
-        self.add_node(node2)
-        self.weights[node1][node2] = weight
+from collections import deque
+from sys import maxsize
 
 
 def rotate_unit_vector(u, r=1):
@@ -20,31 +7,29 @@ def rotate_unit_vector(u, r=1):
         return -u[1], u[0]
     if r == 0:
         return u
-    if r < 0:
-        return rotate_unit_vector(u, r % 4)
     return rotate_unit_vector(rotate_unit_vector(u, r - 1))
 
 
 def read_maze(file):
     # read free space, starting, and target positions from file
     free_space = set()
-    starting_pos = None
-    target_pos = None
     with open(file) as f:
         for i, line in enumerate(f.readlines()):
             for j, c in enumerate(line.strip()):
-                pos = (i, j)
                 if c in ".SE":
-                    free_space.add(pos)
+                    free_space.add((i, j))
                 if c == "S":
-                    starting_pos = pos
+                    starting_pos = (i, j)
                 elif c == "E":
-                    target_pos = pos
+                    target_pos = (i, j)
+
+    # define starting node
+    starting_node = (starting_pos, 0)
 
     # build directed graph with bfs
     visited = set()
-    queue = {(starting_pos, 0)}
-    graph = Graph()
+    queue = {starting_node}
+    graph = {}
     while queue:
         pos, r = queue.pop()
         visited.add((pos, r))
@@ -53,39 +38,58 @@ def read_maze(file):
             direction = rotate_unit_vector((0, 1), _r)
             _pos = pos[0] + direction[0], pos[1] + direction[1]
             if _pos in free_space:
-                graph.add_edge((pos, r), (_pos, _r), 1 + 1000 * abs(dr))
+                # add edge
+                if (pos, r) not in graph:
+                    graph[(pos, r)] = {}
+                if (_pos, _r) not in graph:
+                    graph[(_pos, _r)] = {}
+                graph[(pos, r)][(_pos, _r)] = 1 + 1000 * abs(dr)
+
+                # update queue
                 if (_pos, _r) not in visited and _pos != target_pos:
                     queue.add((_pos, _r))
 
-    return graph, starting_pos, target_pos
+    # define target nodes
+    target_nodes = [node for node in graph if node[0] == target_pos]
+
+    return graph, starting_node, target_nodes
 
 
-def find_cheapest_maze_path(graph, starting_pos, target_pos):
-    # Dijkstra search for cheapest maze path
-    distance = {}
-    previous = {}
-    queue = set()
-    for node in graph.weights:
-        distance[node] = sys.maxsize
-        previous[node] = None
-        queue.add(node)
-    distance[(starting_pos, 0)] = 0
+def find_cheapest_maze_path(graph, starting_node, target_nodes):
+    # bfs search for cheapest paths
+    distance = {node: maxsize for node in graph}
+    distance[starting_node] = 0
+    previous = {node: [] for node in graph}
+    queue = deque(graph.keys())
+    queue.appendleft(starting_node)
 
     while queue:
-        node = min(queue, key=lambda x: distance[x])
-        queue.remove(node)
+        node = queue.popleft()
 
-        for neighbor, weight in graph.weights[node].items():
+        for neighbor, weight in graph[node].items():
             alt = distance[node] + weight
-            if neighbor in queue and alt < distance[neighbor]:
+            if alt < distance[neighbor]:
                 distance[neighbor] = alt
-                previous[neighbor] = node
+                previous[neighbor].clear()
+                queue.append(neighbor)
+            if alt <= distance[neighbor]:
+                previous[neighbor].append(node)
 
-    cheapest_path = min(
-        distance[(target_pos, r)] for r in range(4) if (target_pos, r) in graph.weights
-    )
-    return cheapest_path
+    # find cheapest path cost and gather all the positions on a cheapest path
+    shortest_distance = min(distance[node] for node in target_nodes)
+    visited_pos = set()
+    for target_node in target_nodes:
+        if distance[target_node] == shortest_distance:
+            queue = {target_node}
+            while queue:
+                node = queue.pop()
+                visited_pos.add(node[0])
+                for parent in previous[node]:
+                    queue.add(parent)
+
+    return shortest_distance, len(visited_pos)
 
 
-# print length of cheapest path
-print("Part 1:", find_cheapest_maze_path(*read_maze("day16/input.txt")))
+# print cost of cheapest path and the number of visited positions
+lowest_path_cost, visited_pos = find_cheapest_maze_path(*read_maze("day16/input.txt"))
+print("Part 1:", lowest_path_cost, "\nPart 2:", visited_pos)
